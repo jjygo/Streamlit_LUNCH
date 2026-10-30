@@ -1,0 +1,26 @@
+# 크림 배경 + 테라코타 강조색 하나 + Pretendard (라이트/다크는 사용자 시스템 설정을 따라감)
+[theme]
+font = "Pretendard:https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css"
+headingFontWeights = [800, 700, 700, 600, 600, 600]
+baseRadius = "0.5rem"
+showWidgetBorder = true
+paddingTop = "2.5rem"
+baseFontSize = 19             # 입력칸 글자 16px 이상 → 아이폰 확대(zoom) 방지, 버튼도 커짐
+metricValueFontSize = "1.5rem"
+
+# 라이트는 선택된 메뉴 글자 대비(4.5:1) 맞추려고 강조색을 한 톤 진하게, 테두리는 3:1
+[theme.light]
+primaryColor = "#9C4026"
+backgroundColor = "#FAF6EF"
+secondaryBackgroundColor = "#F2EBDF"
+textColor = "#2B2622"
+borderColor = "#948576"
+linkColor = "#9C4026"
+
+[theme.dark]
+primaryColor = "#C2502F"
+backgroundColor = "#1D1A17"
+secondaryBackgroundColor = "#2A2622"
+textColor = "#F2ECE3"
+borderColor = "#7A7064"
+linkColor = "#E2805E"
