@@ -1,7 +1,11 @@
 import streamlit as st
 import altair as alt
+import html
+import json
+import math
 import pandas as pd
 import qrcode
+import random
 import re
 import socket
 import sqlite3
@@ -78,22 +82,83 @@ def short(name):
     return re.sub(r'\s\S+점$', '', name)  # 화면 좁은 곳에선 지점명 빼기 ('도라스시 남부터미널점' → '도라스시')
 
 
+def wheel_html(names, spin, target, turn, dark):
+    # 돌림판 SVG (결과는 파이썬에서 미리 뽑고, 화면은 그 칸에 멈추게 돌리기만 함)
+    ink = '#F2ECE3' if dark else '#2B2622'
+    n, R, seg = len(names), 140, 360 / len(names)
+    slices = []
+    for i, name in enumerate(names):
+        # 두 색 번갈아, 칸 수가 홀수면 마지막 칸만 세 번째 색 (첫 칸과 같은 색이 붙지 않게)
+        fill, text = ('#E3B9A5', '#2B2622') if n % 2 and i == n - 1 else [('#C2502F', '#FFFFFF'), ('#F2EBDF', '#2B2622')][i % 2]
+        a0, a1 = math.radians(i * seg), math.radians((i + 1) * seg)
+        label = html.escape(name if len(name) <= 7 else name[:6] + '…')
+        slices.append(
+            f'<path d="M0 0L{R * math.sin(a0):.1f} {-R * math.cos(a0):.1f}'
+            f'A{R} {R} 0 0 1 {R * math.sin(a1):.1f} {-R * math.cos(a1):.1f}Z" fill="{fill}"/>'
+            f'<text transform="rotate({(i + .5) * seg:.1f}) translate(0 -34) rotate(-90)" fill="{text}">{label}</text>')
+    before = f'돌리기를 누르면 {n}곳 중 한 곳을 골라줘요'
+    after = f'「{names[target]}」 당첨! 아래 목록에 골라 뒀어요' if spin else before
+    return f'''<!-- spin {spin} -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
+<style>
+body {{ margin: 0; font-family: Pretendard, sans-serif; color: {ink}; text-align: center; }}
+.box {{ position: relative; width: 280px; margin: 8px auto 0; }}
+.pin {{ position: absolute; left: 50%; top: -6px; transform: translateX(-50%); z-index: 1;
+        border: 11px solid transparent; border-top: 20px solid {ink}; }}
+#w {{ transition: transform 4s cubic-bezier(.15, .85, .1, 1); }}
+svg {{ display: block; width: 280px; height: 280px; }}
+text {{ font-size: 11px; dominant-baseline: middle; }}
+#msg {{ margin-top: 12px; font-size: 15px; }}
+@media (prefers-reduced-motion: reduce) {{ #w {{ transition: none; }} }}
+</style>
+<div class="box"><div class="pin"></div><div id="w">
+<svg viewBox="-142 -142 284 284">{''.join(slices)}
+<circle r="{R}" fill="none" stroke="{ink}" stroke-opacity=".25"/><circle r="14" fill="{ink}"/></svg></div></div>
+<div id="msg" aria-live="polite">{before}</div>
+<script>
+const w = document.getElementById('w'), msg = document.getElementById('msg');
+const done = () => msg.textContent = {json.dumps(after)};
+if ({spin}) {{
+  requestAnimationFrame(() => requestAnimationFrame(() => w.style.transform = 'rotate({turn:.1f}deg)'));
+  w.addEventListener('transitionend', done);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) done();
+}}
+</script>'''
+
+
 if 'voted' not in st.session_state:
-    with st.form('vote'):
-        choice = st.radio('식당 고르기', candidates, index=None, captions=[
-            f'{r.menu} {r.price:,.0f}원 · {r.distance_m}m · ★{r.rating}'
-            for r in info.loc[candidates].itertuples()])
+    # 5-1. 돌림판 (뽑힌 식당은 아래 목록에 미리 선택됨)
+    with st.expander('못 고르겠으면 돌림판', icon=':material/casino:'):
+        if st.button('돌리기', icon=':material/refresh:', width='stretch'):
+            k = random.randrange(len(candidates))
+            seg = 360 / len(candidates)
+            turn = 360 * 6 - (k + .5) * seg + random.uniform(-.35, .35) * seg  # 6바퀴 돌고 k번째 칸에서 멈춤
+            st.session_state.pick = candidates[k]
+            st.session_state.wheel = (st.session_state.get('wheel', (0,))[0] + 1, k, turn)
+        spin, k, turn = st.session_state.get('wheel', (0, 0, 0))
+        st.iframe(wheel_html([short(n) for n in candidates], spin, k, turn,
+                             st.context.theme.type == 'dark'), height=330)
+
+    # 5-2. 식당 고르고 투표 (돌림판이나 상세 페이지에서 고른 식당이 있으면 미리 선택)
+    pick = st.session_state.get('pick')
+    with st.container(border=True):
+        choice = st.radio('식당 고르기', candidates, index=candidates.index(pick) if pick in candidates else None,
+                          captions=[f'{r.menu} {r.price:,.0f}원 · {r.distance_m}m · ★{r.rating}'
+                                    for r in info.loc[candidates].itertuples()])
+        if choice:
+            st.page_link('pages/restaurant.py', label=f'「{short(choice)}」 자세히 보기',
+                         icon=':material/info:', query_params={'r': choice})
         nickname = st.text_input('닉네임 (선택)', max_chars=20, placeholder='비우면 익명')
-        submitted = st.form_submit_button('투표하기', type='primary', width='stretch')
-    if submitted and not choice:
-        st.warning('메뉴를 골라주세요.')
-    elif submitted:
-        with lock:
-            conn.execute('INSERT INTO votes (nickname, choice) VALUES (?, ?)',
-                         (nickname.strip() or '익명', choice))
-            conn.commit()
-        st.session_state.voted = choice
-        st.rerun()
+        if st.button('투표하기', type='primary', width='stretch'):
+            if not choice:
+                st.warning('식당을 골라주세요.')
+            else:
+                with lock:
+                    conn.execute('INSERT INTO votes (nickname, choice) VALUES (?, ?)',
+                                 (nickname.strip() or '익명', choice))
+                    conn.commit()
+                st.session_state.voted = choice
+                st.rerun()
 else:
     st.success(f'**{st.session_state.voted}**에 투표했어요', icon=':material/check_circle:')
 
@@ -114,7 +179,8 @@ def dashboard():
         right.metric('1위', '아직 없음', border=True)
     elif len(top) == 1:
         right.metric(f'1위 · {votes.max()}표', short(top[0]), border=True)
-        st.caption(f'[{top[0]} 카카오맵에서 보기 →]({info.at[top[0], "kakao_url"]})')
+        st.page_link('pages/restaurant.py', label=f'「{short(top[0])}」 자세히 보기',
+                     icon=':material/info:', query_params={'r': top[0]})
     else:
         right.metric(f'공동 1위 · {votes.max()}표', f'{len(top)}곳 동률', border=True)
         st.caption(' · '.join(short(n) for n in top))

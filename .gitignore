@@ -3,3 +3,4 @@ lunch_votes.db*
 .venv/
 __pycache__/
 .DS_Store
+.omc/

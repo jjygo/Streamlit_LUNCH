@@ -1,3 +1,7 @@
+# 사이드바 페이지 메뉴 숨김 (상세 페이지는 투표 화면의 '자세히 보기' 링크로만 이동)
+[client]
+showSidebarNavigation = false
+
 # 크림 배경 + 테라코타 강조색 하나 + Pretendard (라이트/다크는 사용자 시스템 설정을 따라감)
 [theme]
 font = "Pretendard:https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css"
