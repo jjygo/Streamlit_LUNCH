@@ -1,3 +1,3 @@
-streamlit>=1.66
+streamlit==1.66.1
 pandas
 qrcode>=8.0
